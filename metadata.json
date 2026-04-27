@@ -1,0 +1,6 @@
+{
+  "name": "InventX IOT - Smart Energy Saver & Home Safety",
+  "description": "An advanced IOT solution for real-time energy monitoring, occupancy-based automation, and intelligent home safety alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["Real-time Monitoring", "Data Visualization", "Device Control"]
+}
