@@ -42,6 +42,12 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { cn } from './lib/utils';
+import { 
+  getSmartMacroSuggestions, 
+  getEnergyInsights, 
+  SmartRule, 
+  EnergyInsight 
+} from './services/geminiService';
 
 // --- Mock Data ---
 const generateChartData = (range: string = 'Daily') => {
@@ -303,7 +309,7 @@ const DashboardView = ({
                           <p className="text-[10px] font-black text-ink/30 uppercase tracking-widest mb-1">{payload[0].payload.name}</p>
                           <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full bg-olive" />
-                            <p className="text-xs font-bold text-ink">{payload[0].value?.toFixed(0)} <span className="opacity-40 italic">Watts</span></p>
+                            <p className="text-xs font-bold text-ink">{Number(payload[0].value)?.toFixed(0)} <span className="opacity-40 italic">Watts</span></p>
                           </div>
                         </div>
                       );
@@ -401,14 +407,20 @@ const AnalyticsView = ({
   metrics, 
   activeRange, 
   onRangeChange,
-  onDetailedMap 
+  onDetailedMap,
+  insight,
+  isLoading,
+  onRefresh
 }: { 
   data: any, 
   zones: any[], 
   metrics: any, 
   activeRange: string,
   onRangeChange: (r: string) => void,
-  onDetailedMap: () => void
+  onDetailedMap: () => void,
+  insight: EnergyInsight | null,
+  isLoading: boolean,
+  onRefresh: () => void
 }) => (
   <motion.div 
     initial={{ opacity: 0, scale: 0.98 }}
@@ -420,19 +432,22 @@ const AnalyticsView = ({
         <h2 className="text-4xl font-display font-medium text-ink leading-none mb-3">Mesh Analytics</h2>
         <p className="text-[10px] text-ink/30 font-black uppercase tracking-[0.3em]">Advanced topological load research</p>
       </div>
-      <div className="flex gap-2 p-1.5 bg-bg-card rounded-[2rem] border border-olive/5">
-        {['Day', 'Week', 'Month', 'Year'].map(t => (
-          <button 
-            key={t} 
-            onClick={() => onRangeChange(t)}
-            className={cn(
-              "px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all", 
-              activeRange === t ? "bg-white text-olive shadow-sm" : "text-ink/30 hover:text-ink"
-            )}
-          >
-            {t}
-          </button>
-        ))}
+      <div className="flex items-center gap-4">
+        {isLoading && <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}><Cpu size={16} className="text-olive" /></motion.div>}
+        <div className="flex gap-2 p-1.5 bg-bg-card rounded-[2rem] border border-olive/5">
+          {['Day', 'Week', 'Month', 'Year'].map(t => (
+            <button 
+              key={t} 
+              onClick={() => onRangeChange(t)}
+              className={cn(
+                "px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all", 
+                activeRange === t ? "bg-white text-olive shadow-sm" : "text-ink/30 hover:text-ink"
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
 
@@ -477,43 +492,87 @@ const AnalyticsView = ({
       </div>
 
       <div className="space-y-8">
-        <div className="bg-bg-card/40 rounded-[3.5rem] p-10 border border-olive/10 h-full flex flex-col items-center justify-center text-center">
-           <div className="w-48 h-48 relative mb-8">
-             <svg className="w-full h-full -rotate-90">
-               <circle cx="96" cy="96" r="88" fill="none" stroke="rgba(45,76,59,0.05)" strokeWidth="12" />
-               <motion.circle 
-                 cx="96" cy="96" r="88" fill="none" stroke="#2D4C3B" strokeWidth="12" 
-                 strokeLinecap="round" strokeDasharray="553" 
-                 initial={{ strokeDashoffset: 553 }}
-                 animate={{ strokeDashoffset: 553 - (parseFloat(metrics.efficiency) / 100) * 553 }}
-                 transition={{ duration: 2, ease: "easeOut" }}
-               />
-             </svg>
-             <div className="absolute inset-0 flex flex-col items-center justify-center">
-               <div className="text-4xl font-display font-medium text-olive">{metrics.efficiency}%</div>
-               <div className="text-[9px] font-black text-ink/30 uppercase tracking-widest">Efficiency</div>
+        <div className="bg-bg-card/40 rounded-[3.5rem] p-10 border border-olive/10 h-full flex flex-col items-center justify-center text-center relative overflow-hidden">
+           {isLoading && (
+             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-20 flex flex-col items-center justify-center">
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 3, ease: "linear" }}>
+                  <Cpu size={40} className="text-olive" />
+                </motion.div>
+                <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-olive">AI Synthesizing...</p>
              </div>
-           </div>
-           <h4 className="text-lg font-display font-medium text-ink mb-2 italic">Optimal Throughput</h4>
-           <p className="text-[11px] text-ink/40 italic px-6">Your mesh topology is currently operating at peak efficiency with minimal packet delay.</p>
-           <button 
-             onClick={onDetailedMap}
-             className="mt-8 px-10 py-4 bg-white border border-olive/10 rounded-[2rem] text-[9px] font-black uppercase tracking-widest text-ink/60 hover:text-olive transition-colors hover:shadow-xl"
-           >
-             Detailed Node Map
-           </button>
+           )}
+           
+           {!insight && !isLoading ? (
+             <div className="flex flex-col items-center">
+                <div className="w-16 h-16 bg-olive/5 rounded-full flex items-center justify-center mb-6">
+                  <Activity size={24} className="text-olive" />
+                </div>
+                <h4 className="text-lg font-display font-medium text-ink mb-2 italic">No Insights Yet</h4>
+                <p className="text-[11px] text-ink/40 italic px-6 mb-6">Start analysis to get AI-powered recommendations.</p>
+                <button 
+                  onClick={onRefresh}
+                  className="px-8 py-3 bg-olive text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shadow-olive/10 transition-all hover:scale-105"
+                >
+                  Analyze System
+                </button>
+             </div>
+           ) : (
+             <motion.div 
+               initial={{ opacity: 0, y: 10 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="h-full flex flex-col"
+             >
+                <div className="w-12 h-12 bg-olive rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-olive/20 mx-auto">
+                  <Zap size={20} className="text-white" />
+                </div>
+                <h4 className="text-lg font-display font-medium text-ink mb-2 italic">Gemini Insights</h4>
+                <div className="text-[10px] text-ink/50 italic leading-relaxed text-left mb-6 bg-white/40 p-4 rounded-2xl border border-olive/5">
+                  {insight?.analysis}
+                </div>
+                <div className="space-y-3 text-left">
+                  {insight?.recommendations.map((rec, i) => (
+                    <div key={i} className="flex gap-3">
+                      <div className="w-4 h-4 rounded-full bg-olive/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Plus size={8} className="text-olive" />
+                      </div>
+                      <p className="text-[9px] font-bold text-ink/60 italic">{rec}</p>
+                    </div>
+                  ))}
+                </div>
+                <button 
+                   onClick={onRefresh}
+                   className="mt-auto px-8 py-3 text-olive border border-olive/10 rounded-full text-[9px] font-black uppercase tracking-widest transition-all hover:bg-olive/5"
+                >
+                   Refresh Analysis
+                </button>
+             </motion.div>
+           )}
         </div>
       </div>
     </div>
   </motion.div>
 );
 
-const AutomationView = ({ zones, addToast, onToggleRule, onNewMacro, onGlobalTrigger }: { 
+const AutomationView = ({ 
+  zones, 
+  addToast, 
+  onToggleRule, 
+  onNewMacro, 
+  onGlobalTrigger,
+  onAiOptimize,
+  isLoading,
+  suggestions,
+  onDeployAiRule
+}: { 
   zones: any[], 
   addToast: any, 
   onToggleRule: (zoneId: string, ruleIndex: number) => void,
   onNewMacro: () => void,
-  onGlobalTrigger: () => void
+  onGlobalTrigger: () => void,
+  onAiOptimize: () => void,
+  isLoading: boolean,
+  suggestions: SmartRule[],
+  onDeployAiRule: (text: string) => void
 }) => (
   <motion.div 
     initial={{ opacity: 0, x: 20 }}
@@ -525,14 +584,71 @@ const AutomationView = ({ zones, addToast, onToggleRule, onNewMacro, onGlobalTri
         <h2 className="text-4xl font-display font-medium text-ink leading-none mb-3">Automation Hub</h2>
         <p className="text-[10px] text-ink/30 font-black uppercase tracking-[0.3em]">Decentralized trigger propagation</p>
       </div>
-      <button 
-        onClick={onNewMacro}
-        className="px-8 py-4 bg-ink text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-ink/20 hover:bg-olive transition-all flex items-center gap-3"
-      >
-        <Plus size={16} />
-        New Macro
-      </button>
+      <div className="flex gap-4">
+        <button 
+          onClick={onAiOptimize}
+          disabled={isLoading}
+          className={cn(
+            "px-8 py-4 bg-white border border-olive/10 text-olive rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-olive/5 hover:bg-olive hover:text-white transition-all flex items-center gap-3",
+            isLoading && "opacity-50 cursor-wait"
+          )}
+        >
+          {isLoading ? (
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }}>
+              <Cpu size={16} />
+            </motion.div>
+          ) : (
+            <Zap size={16} />
+          )}
+          AI Optimize
+        </button>
+        <button 
+          onClick={onNewMacro}
+          className="px-8 py-4 bg-ink text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-ink/20 hover:bg-olive transition-all flex items-center gap-3"
+        >
+          <Plus size={16} />
+          New Macro
+        </button>
+      </div>
     </div>
+
+    {suggestions.length > 0 && (
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-olive p-10 rounded-[4rem] text-white overflow-hidden relative"
+      >
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 blur-3xl rounded-full translate-x-1/3 -translate-y-1/3" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-4 mb-6">
+             <div className="p-3 bg-white/10 rounded-2xl">
+               <Cpu size={24} />
+             </div>
+             <div>
+                <h3 className="text-xl font-display font-medium italic">Aether AI Insights</h3>
+                <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Synthesized Macro Proposals</p>
+             </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {suggestions.map((suggestion, i) => (
+              <div key={i} className="p-6 bg-white/10 border border-white/10 rounded-[2.5rem] backdrop-blur-sm flex flex-col justify-between group">
+                <div>
+                  <div className="text-[11px] font-black text-white/40 uppercase tracking-widest mb-3">Protocol Prop {i+1}</div>
+                  <h4 className="text-sm font-bold italic mb-2">"{suggestion.text}"</h4>
+                  <p className="text-[9px] opacity-60 italic leading-relaxed">{suggestion.reason}</p>
+                </div>
+                <button 
+                  onClick={() => onDeployAiRule(suggestion.text)}
+                  className="mt-6 w-full py-3 bg-white text-olive rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-sage hover:text-white transition-all"
+                >
+                  Apply Rule
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    )}
 
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
       {/* ... zone mapping ... */}
@@ -799,8 +915,33 @@ export default function App() {
 
   const [data, setData] = useState(generateChartData());
 
+  const fetchAiSuggestions = async () => {
+    setIsAiLoading(true);
+    addToast("Consulting Mesh Intelligence...", Cpu);
+    const suggestions = await getSmartMacroSuggestions(zones);
+    setAiSuggestions(suggestions);
+    setIsAiLoading(false);
+  };
+
+  const fetchEnergyInsights = async () => {
+    setIsInsightLoading(true);
+    const insights = await getEnergyInsights(systemMetrics, zones);
+    setEnergyInsight(insights);
+    setIsInsightLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeView === 'analytics' && !energyInsight && !isInsightLoading) {
+      fetchEnergyInsights();
+    }
+  }, [activeView]);
+
   const [selectedZone, setSelectedZone] = useState<null | typeof zones[0]>(null);
   const [analyticsRange, setAnalyticsRange] = useState('Week');
+  const [aiSuggestions, setAiSuggestions] = useState<SmartRule[]>([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [energyInsight, setEnergyInsight] = useState<EnergyInsight | null>(null);
+  const [isInsightLoading, setIsInsightLoading] = useState(false);
   const [zoneRange, setZoneRange] = useState('Daily');
   const [isComparing, setIsComparing] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; message: string; icon: any }[]>([]);
@@ -1077,12 +1218,12 @@ export default function App() {
                                     <p className="text-[10px] font-black text-ink/30 uppercase tracking-widest mb-1">{payload[0].payload.name}</p>
                                     <div className="flex items-center gap-2">
                                       <div className="w-1.5 h-1.5 rounded-full bg-olive" />
-                                      <p className="text-xs font-bold text-ink">Current: {payload[0].value?.toFixed(0)}W</p>
+                                      <p className="text-xs font-bold text-ink">Current: {Number(payload[0].value ?? 0).toFixed(0)}W</p>
                                     </div>
                                     {isComparing && payload[1] && (
                                       <div className="flex items-center gap-2">
                                         <div className="w-1.5 h-1.5 rounded-full bg-ink/10" />
-                                        <p className="text-xs font-bold text-ink/40">Previous: {payload[1].value?.toFixed(0)}W</p>
+                                        <p className="text-xs font-bold text-ink/40">Previous: {Number(payload[1].value ?? 0).toFixed(0)}W</p>
                                       </div>
                                     )}
                                   </div>
@@ -1291,7 +1432,7 @@ export default function App() {
                             )} />
                           </div>
                           <div className="text-2xl font-display font-medium text-ink flex items-baseline gap-2">
-                            {zone.active ? zone.consumption : zone.status}
+                            {zone.active ? `${zone.nominalConsumption}W` : zone.status}
                             <span className="text-[10px] text-ink/30 font-black uppercase tracking-widest">{zone.type}</span>
                           </div>
                       </div>
@@ -1313,6 +1454,9 @@ export default function App() {
                 setData(generateChartData(range));
               }}
               onDetailedMap={() => setActiveView('zones')}
+              insight={energyInsight}
+              isLoading={isInsightLoading}
+              onRefresh={fetchEnergyInsights}
             />
           )}
 
@@ -1320,7 +1464,7 @@ export default function App() {
             <AutomationView 
               zones={zones} 
               addToast={addToast} 
-              onToggleRule={toggleRule}
+              onToggleRule={toggleRule} 
               onNewMacro={() => {
                 setSelectedZone(zones[0]);
                 setShowRuleBuilder(true);
@@ -1330,6 +1474,15 @@ export default function App() {
                 setSelectedZone(zones[0]);
                 setShowRuleBuilder(true);
                 addToast("Global trigger matrix mapping initiated", Globe);
+              }}
+              onAiOptimize={fetchAiSuggestions}
+              isLoading={isAiLoading}
+              suggestions={aiSuggestions}
+              onDeployAiRule={(text) => {
+                const ruleObj = { text, active: true };
+                setZones(prev => prev.map(z => z.id === zones[0].id ? { ...z, rules: [...z.rules, ruleObj] } : z));
+                addToast("AI Protocol deployed to Living Room", Zap);
+                setAiSuggestions(prev => prev.filter(s => s.text !== text));
               }}
             />
           )}
