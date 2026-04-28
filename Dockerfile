@@ -26,9 +26,6 @@ ENV HOST=0.0.0.0
 # Copy built files from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy the nginx template
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# Update the default nginx config to listen on the $PORT provided by Cloud Run
+# We do this in a CMD to ensure it happens at runtime
+CMD ["/bin/sh", "-c", "sed -i \"s/listen  80;/listen ${PORT};/\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
