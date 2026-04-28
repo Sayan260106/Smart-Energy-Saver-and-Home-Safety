@@ -28,4 +28,4 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # Update the default nginx config to listen on the $PORT provided by Cloud Run
 # We do this in a CMD to ensure it happens at runtime
-CMD ["/bin/sh", "-c", "sed -i \"s/listen  80;/listen ${PORT};/\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "sed -i \"s/listen  *[0-9]*;/listen ${PORT};/\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
