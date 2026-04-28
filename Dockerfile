@@ -19,15 +19,13 @@ RUN npm run build
 # Production Stage
 FROM nginx:stable-alpine
 
-# Copy built files from the build stage to nginx's default public directory
+# Set default port for local testing (Cloud Run will override this)
+ENV PORT=80
+ENV HOST=0.0.0.0
+
+# Copy built files from the build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy a custom nginx configuration to handle SPA routing (optional but recommended)
-# If you don't have a custom nginx.conf, nginx will serve index.html by default
-# but won't handle client-side routing (e.g. /dashboard) correctly.
-# For a simple React app without client-side routing (only one page), this is fine.
-# If you add routing, you'll need a custom nginx.conf.
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# Update the default nginx config to listen on the $PORT provided by Cloud Run
+# We do this in a CMD to ensure it happens at runtime
+CMD ["/bin/sh", "-c", "sed -i \"s/listen  *[0-9]*;/listen ${PORT};/\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
